@@ -32,57 +32,57 @@ Private Function LetterIndex(ByVal ch As String) As Long
     End If
 End Function
 
-Public Sub ParseUTM_C10_To_E10_M10()
+Public Sub ParseUTM_L10_To_L12_T12()
     Dim code As String, rest As String
     Dim codeX As String, labelX As String
     Dim yr As String, mo As String, dy As String
     Dim serialLetter As String, serialIdx As Long
     Dim locCode As String, locLabel As String
-    Dim rngMenu As Range, rngItem As Range, rngPerson As Range, rngDevice As Range, rngLoc As Range
+    Dim rngMenu As Range, rngDevice As Range, rngTarget As Range, rngProduct As Range, rngLoc As Range
 
     ' === Read input ===
-    code = Trim$(Range("C10").Value)
+    code = Trim$(Range("L10").Value)
     If Len(code) = 0 Then
-        MsgBox "C10 is empty.", vbExclamation: Exit Sub
+        MsgBox "L10 is empty.", vbExclamation: Exit Sub
     End If
     rest = code
 
     ' === Bind mapping ranges by their names ===
     On Error Resume Next
-    Set rngMenu = Range("MENU_TABLE")
-    Set rngItem = Range("ITEM_TABLE")
-    Set rngPerson = Range("PERSON_TABLE")
-    Set rngDevice = Range("DEVICE_TABLE")
-    Set rngLoc = Range("LOCATION_TABLE")
+    Set rngMenu = Range("Data_Menu")
+    Set rngDevice = Range("Data_Device")
+    Set rngTarget = Range("Data_Target")
+    Set rngProduct = Range("Data_Product")
+    Set rngLoc = Range("Data_Company")
     On Error GoTo 0
 
-    If rngMenu Is Nothing Or rngItem Is Nothing Or rngPerson Is Nothing Or rngDevice Is Nothing Or rngLoc Is Nothing Then
-        MsgBox "One or more mapping ranges (MENU_TABLE, ITEM_TABLE, PERSON_TABLE, DEVICE_TABLE, LOCATION_TABLE) are missing.", vbCritical
+    If rngMenu Is Nothing Or rngDevice Is Nothing Or rngTarget Is Nothing Or rngProduct Is Nothing Or rngLoc Is Nothing Then
+        MsgBox "One or more mapping ranges (Data_Menu, Data_Device, Data_Target, Data_Product, Data_Company) are missing.", vbCritical
         Exit Sub
     End If
 
     ' Clear previous outputs
-    Range("E10:M10").ClearContents
+    Range("L12:T12").ClearContents
 
     ' 1) Menu (variable length, longest prefix)
     If Not LongestPrefixMatch(rest, rngMenu, codeX, labelX) Then
         MsgBox "Menu code not found at start of: " & rest, vbExclamation: Exit Sub
     End If
-    Range("E10").Value = labelX
+    Range("L12").Value = labelX
     rest = Mid$(rest, Len(codeX) + 1)
 
-    ' 2) Item / Name (variable length)
-    If Not LongestPrefixMatch(rest, rngItem, codeX, labelX) Then
-        MsgBox "Item code not found after menu. Remaining: " & rest, vbExclamation: Exit Sub
+    ' 2) Device / Name (variable length)
+    If Not LongestPrefixMatch(rest, rngDevice, codeX, labelX) Then
+        MsgBox "Device code not found after menu. Remaining: " & rest, vbExclamation: Exit Sub
     End If
-    Range("F10").Value = labelX
+    Range("M12").Value = labelX
     rest = Mid$(rest, Len(codeX) + 1)
 
-    ' 3) Person (variable length)
-    If Not LongestPrefixMatch(rest, rngPerson, codeX, labelX) Then
-        MsgBox "Person code not found after item. Remaining: " & rest, vbExclamation: Exit Sub
+    ' 3) Target (variable length)
+    If Not LongestPrefixMatch(rest, rngTarget, codeX, labelX) Then
+        MsgBox "Target code not found after Device. Remaining: " & rest, vbExclamation: Exit Sub
     End If
-    Range("G10").Value = labelX
+    Range("N12").Value = labelX
     rest = Mid$(rest, Len(codeX) + 1)
 
     ' 4) Date (fixed 6 digits: YYMMDD)
@@ -92,36 +92,36 @@ Public Sub ParseUTM_C10_To_E10_M10()
     yr = "20" & Left$(rest, 2)
     mo = Mid$(rest, 3, 2)
     dy = Mid$(rest, 5, 2)
-    Range("H10").Value = yr
-    Range("I10").Value = mo
-    Range("J10").Value = dy
+    Range("O12").Value = yr
+    Range("P12").Value = mo
+    Range("Q12").Value = dy
     rest = Mid$(rest, 7)
 
-    ' 5) Device (variable length)
-    If Not LongestPrefixMatch(rest, rngDevice, codeX, labelX) Then
-        MsgBox "Device code not found after date. Remaining: " & rest, vbExclamation: Exit Sub
+    ' 5) Product (variable length)
+    If Not LongestPrefixMatch(rest, rngProduct, codeX, labelX) Then
+        MsgBox "Product code not found after date. Remaining: " & rest, vbExclamation: Exit Sub
     End If
-    Range("K10").Value = labelX
+    Range("R12").Value = labelX
     rest = Mid$(rest, Len(codeX) + 1)
 
     ' 6) Serial letter (exactly 1 letter)
     If Len(rest) < 1 Or Not (Left$(LCase$(rest), 1) Like "[a-z]") Then
-        MsgBox "Expected 1-letter serial after device. Remaining: " & rest, vbExclamation: Exit Sub
+        MsgBox "Expected 1-letter serial after Product. Remaining: " & rest, vbExclamation: Exit Sub
     End If
     serialLetter = Left$(LCase$(rest), 1)
     serialIdx = LetterIndex(serialLetter)
-    Range("L10").Value = serialLetter & " (" & serialIdx & ")"
+    Range("S12").Value = serialLetter & " (" & serialIdx & ")"
     rest = Mid$(rest, 2)
 
-    ' 7) Location (exactly 1 digit 1..8, then map)
+    ' 7) Company (exactly 1 digit 1..8, then map)
     If Len(rest) < 1 Or Not (Left$(rest, 1) Like "[1-8]") Then
-        MsgBox "Expected 1-digit location (1..8). Remaining: " & rest, vbExclamation: Exit Sub
+        MsgBox "Expected 1-digit Company (1..8). Remaining: " & rest, vbExclamation: Exit Sub
     End If
     locCode = Left$(rest, 1)
-    ' Lookup location label
+    ' Lookup Company label
     If Not LongestPrefixMatch(locCode, rngLoc, codeX, labelX) Then
         labelX = "Unknown"
     End If
-    Range("M10").Value = labelX
+    Range("T12").Value = labelX
     ' rest should be empty now (optional check)
 End Sub
