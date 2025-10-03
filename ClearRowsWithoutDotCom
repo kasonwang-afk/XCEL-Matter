@@ -1,0 +1,21 @@
+Public Sub ClearRowsWithoutDotCom()
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets("URL Checker") ' Update if needed
+
+    Dim i As Long
+    Dim lastRow As Long: lastRow = 202
+    Dim cellText As String
+
+    For i = 4 To lastRow
+        cellText = LCase(ws.Cells(i, 2).value)
+        If Len(cellText) > 0 And InStr(cellText, ".com") = 0 Then
+            ' Clear B to Q in this row
+            With ws.Range(ws.Cells(i, 2), ws.Cells(i, 17))
+                .ClearContents
+                .ClearFormats
+                .WrapText = False
+            End With
+            ws.Rows(i).RowHeight = ws.StandardHeight
+        End If
+    Next i
+End Sub

@@ -1,0 +1,182 @@
+Option Explicit
+
+' --- Utility Functions ---
+Private Function URLDecode(ByVal txt As String) As String
+    Dim i As Long, ch As String, result As String
+    i = 1
+    Do While i <= Len(txt)
+        ch = Mid(txt, i, 1)
+        If ch = "%" And i + 2 <= Len(txt) Then
+            result = result & Chr(CLng("&H" & Mid(txt, i + 1, 2)))
+            i = i + 3
+        ElseIf ch = "+" Then
+            result = result & " "
+            i = i + 1
+        Else
+            result = result & ch
+            i = i + 1
+        End If
+    Loop
+    URLDecode = result
+End Function
+
+Private Function LookupLabel(ByVal code As String, ByVal tableRange As Range) As String
+    Dim r As Range
+    code = LCase(Trim(code))
+    For Each r In tableRange.Columns(1).Cells
+        If LCase(Trim(r.Value)) = code Then
+            LookupLabel = r.Offset(0, 1).Value
+            Exit Function
+        End If
+    Next r
+    LookupLabel = "Not found"
+End Function
+
+Private Function LongestPrefixMatch(ByVal s As String, ByVal twoCol As Range, _
+                                    ByRef outCode As String, ByRef outLabel As String) As Boolean
+    Dim r As Range, bestLen As Long, c As String
+    s = LCase$(s)
+    LongestPrefixMatch = False
+    If twoCol Is Nothing Then Exit Function
+    For Each r In twoCol.Columns(1).Cells
+        c = LCase$(Trim(CStr(r.Value)))
+        If Len(c) > 0 Then
+            If Left$(s, Len(c)) = c Then
+                If Len(c) > bestLen Then
+                    bestLen = Len(c)
+                    outCode = c
+                    outLabel = CStr(r.Offset(0, 1).Value)
+                    LongestPrefixMatch = True
+                End If
+            End If
+        End If
+    Next r
+End Function
+
+Private Function LetterIndex(ByVal ch As String) As Long
+    ch = LCase(Trim(ch))
+    If ch Like "[a-z]" Then
+        LetterIndex = Asc(ch) - Asc("a") + 1
+    Else
+        LetterIndex = 0
+    End If
+End Function
+
+' --- Main Macro ---
+Public Sub ParseURL_CleanSheet()
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets("URL chinese name")
+
+    ' Clear previous output
+    ws.Range("C3:Q252").ClearContents
+
+    Dim i As Long, url As String, parts() As String
+    Dim parentID As String, childID As String, campaign As String
+    Dim utmSource As String, utmMedium As String
+    Dim codeX As String, labelX As String, rest As String
+    Dim yr As String, mo As String, dy As String
+    Dim serialLetter As String, serialIdx As Long
+    Dim locCode As String
+    Dim msg As String
+
+    ' Named ranges
+    Dim rngMenu As Range, rngDevice As Range, rngTarget As Range
+    Dim rngProduct As Range, rngCompany As Range
+    Dim rngUtmSource As Range, rngUtmMedium As Range
+
+    On Error Resume Next
+    Set rngMenu = Range("Data_Menu")
+    Set rngDevice = Range("Data_Device")
+    Set rngTarget = Range("Data_Target")
+    Set rngProduct = Range("Data_Product")
+    Set rngCompany = Range("Data_Company")
+    Set rngUtmSource = Range("Data_UtmSource")
+    Set rngUtmMedium = Range("Data_UtmMedium")
+    On Error GoTo 0
+
+    For i = 3 To 252
+        msg = ""
+        ws.Range(ws.Cells(i, 3), ws.Cells(i, 17)).ClearContents ' Always clear row
+
+        url = Trim(ws.Cells(i, 2).Value)
+        If Len(url) = 0 Then GoTo SkipRow
+
+        ' ParentID
+        If InStr(url, "/lp/") > 0 Then
+            parentID = Mid(url, InStr(url, "/lp/") + 4)
+            If InStr(parentID, "?") > 0 Then parentID = Left(parentID, InStr(parentID, "?") - 1)
+            ws.Cells(i, 3).Value = parentID
+        Else
+            msg = msg & "? Missing '/lp/' path. "
+        End If
+
+        ' ChildID
+        If InStr(url, "urlid=") > 0 Then
+            childID = URLDecode(Split(Split(url, "urlid=")(1), "&")(0))
+            ws.Cells(i, 4).Value = childID
+        Else
+            msg = msg & "? Missing 'urlid'. "
+        End If
+
+        ' UTM Campaign
+        If InStr(url, "utm_campaign=") > 0 Then
+            campaign = URLDecode(Split(Split(url, "utm_campaign=")(1), "&")(0))
+            ws.Cells(i, 5).Value = campaign
+        Else
+            msg = msg & "? Missing 'utm_campaign'. "
+            GoTo OutputRow
+        End If
+
+        ' UTM Source
+        If InStr(url, "utm_source=") > 0 Then
+            utmSource = LCase(URLDecode(Split(Split(url, "utm_source=")(1), "&")(0)))
+            ws.Cells(i, 15).Value = LookupLabel(utmSource, rngUtmSource)
+        Else
+            msg = msg & "? Missing 'utm_source'. "
+        End If
+
+        ' UTM Medium
+        If InStr(url, "utm_medium=") > 0 Then
+            utmMedium = LCase(URLDecode(Split(Split(url, "utm_medium=")(1), "&")(0)))
+            ws.Cells(i, 16).Value = LookupLabel(utmMedium, rngUtmMedium)
+        Else
+            msg = msg & "? Missing 'utm_medium'. "
+        End If
+
+        ' Decode campaign
+        rest = campaign
+
+        If Not LongestPrefixMatch(rest, rngMenu, codeX, labelX) Then msg = msg & "? Menu not found. ": GoTo OutputRow
+        ws.Cells(i, 6).Value = labelX: rest = Mid(rest, Len(codeX) + 1)
+
+        If Not LongestPrefixMatch(rest, rngDevice, codeX, labelX) Then msg = msg & "? Device not found. ": GoTo OutputRow
+        ws.Cells(i, 7).Value = labelX: rest = Mid(rest, Len(codeX) + 1)
+
+        If Not LongestPrefixMatch(rest, rngTarget, codeX, labelX) Then msg = msg & "? Target not found. ": GoTo OutputRow
+        ws.Cells(i, 8).Value = labelX: rest = Mid(rest, Len(codeX) + 1)
+
+        If Len(rest) < 6 Or Not IsNumeric(Left(rest, 6)) Then msg = msg & "? Invalid date. ": GoTo OutputRow
+        yr = "20" & Left(rest, 2): mo = Mid(rest, 3, 2): dy = Mid(rest, 5, 2)
+        ws.Cells(i, 9).Value = yr: ws.Cells(i, 10).Value = mo: ws.Cells(i, 11).Value = dy
+        rest = Mid(rest, 7)
+
+        If Not LongestPrefixMatch(rest, rngProduct, codeX, labelX) Then msg = msg & "? Product not found. ": GoTo OutputRow
+        ws.Cells(i, 12).Value = labelX: rest = Mid(rest, Len(codeX) + 1)
+
+        If Len(rest) < 1 Or Not (Left(LCase(rest), 1) Like "[a-z]") Then msg = msg & "? Invalid serial. ": GoTo OutputRow
+        serialLetter = Left(LCase(rest), 1): serialIdx = LetterIndex(serialLetter)
+        ws.Cells(i, 13).Value = serialLetter & " (" & serialIdx & ")"
+        rest = Mid(rest, 2)
+
+        If Len(rest) < 1 Or Not (Left(rest, 1) Like "[1-8]") Then msg = msg & "? Invalid company digit. ": GoTo OutputRow
+        locCode = Left(rest, 1)
+        If Not LongestPrefixMatch(locCode, rngCompany, codeX, labelX) Then labelX = "Unknown"
+        ws.Cells(i, 14).Value = labelX
+
+OutputRow:
+        ws.Cells(i, 17).Value = msg
+
+SkipRow:
+    Next i
+End Sub
+
